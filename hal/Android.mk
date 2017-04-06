@@ -244,6 +244,7 @@ LOCAL_SHARED_LIBRARIES := \
 	libhardware \
 	libtinyalsa \
 	libtinycompress \
+	libsecril-client \
 	libaudioroute \
 	libdl \
 	libhardware \
@@ -254,6 +255,7 @@ LOCAL_C_INCLUDES += \
 	external/tinycompress/include \
 	external/expat/lib \
 	hardware/libhardware/include \
+	hardware/samsung/ril/libsecril-client \
 	$(call include-path-for, audio-route) \
 	$(call include-path-for, audio-effects) \
 	$(LOCAL_PATH)/$(AUDIO_PLATFORM) \
