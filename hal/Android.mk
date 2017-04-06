@@ -37,6 +37,7 @@ endif
 
 LOCAL_SRC_FILES := \
 	audio_hw.c \
+	ril_interface.c \
 	voice.c \
 	platform_info.c \
 	$(AUDIO_PLATFORM)/platform.c
