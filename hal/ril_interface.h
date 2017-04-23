@@ -19,16 +19,6 @@
 
 #include <secril-client.h>
 
-/**
- * @brief The callback to change to wideband which should
- * be implemented by the audio HAL.
- *
- * @param[in]  data          User data poiner
- * @param[in]  wb_amr_type   0 = disable WB, 1 = enable WB,
- *                           2 = WB (and probably NS)
- */
-typedef void (*ril_wb_amr_callback)(void *data, int wb_amr_type);
-
 struct ril_handle
 {
     void *client;
@@ -52,13 +42,5 @@ int ril_set_call_clock_sync(struct ril_handle *ril,
                             enum _SoundClockCondition condition);
 
 int ril_set_mute(struct ril_handle *ril, enum _MuteCondition condition);
-
-int ril_set_two_mic_control(struct ril_handle *ril,
-                            enum __TwoMicSolDevice device,
-                            enum __TwoMicSolReport report);
-
-int ril_set_wb_amr_callback(struct ril_handle *ril,
-                            ril_wb_amr_callback fn,
-                            void *data);
 
 #endif
