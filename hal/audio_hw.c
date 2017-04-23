@@ -1041,6 +1041,12 @@ int select_devices(struct audio_device *adev, audio_usecase_t uc_id)
     if (out_snd_device != SND_DEVICE_NONE) {
         if (usecase->devices & AUDIO_DEVICE_OUT_ALL_CODEC_BACKEND)
             check_usecases_codec_backend(adev, usecase, out_snd_device);
+
+        /* We need to update the audio path if we switch the out devices */
+        if (voice_is_in_call(adev)) {
+            set_voice_session_audio_path(adev, usecase->devices);
+        }
+
         enable_snd_device(adev, out_snd_device);
     }
 
@@ -3704,6 +3710,7 @@ static int adev_close(hw_device_t *device)
     if ((--audio_device_ref_count) == 0) {
         if (amplifier_close() != 0)
             ALOGE("Amplifier close failed");
+        voice_deinit(adev);
         audio_extn_sound_trigger_deinit(adev);
         audio_extn_listen_deinit(adev);
         audio_extn_utils_release_streams_output_cfg_list(&adev->streams_output_cfg_list);

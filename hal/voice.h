@@ -20,6 +20,8 @@
 #ifndef VOICE_H
 #define VOICE_H
 
+#include "ril_interface.h"
+
 #define BASE_SESS_IDX       0
 #define VOICE_SESS_IDX     (BASE_SESS_IDX)
 
@@ -58,11 +60,14 @@ struct voice_session {
 
 struct voice {
     struct voice_session session[MAX_VOICE_SESSIONS];
+    struct ril_handle ril;
     int tty_mode;
     bool mic_mute;
     float volume;
     bool is_in_call;
     bool in_call;
+    /* from uc_info */
+    audio_devices_t session_out_device;
 };
 
 enum {
@@ -71,6 +76,9 @@ enum {
     INCALL_REC_DOWNLINK,
     INCALL_REC_UPLINK_AND_DOWNLINK,
 };
+
+
+void set_voice_session_audio_path(struct audio_device * adev, audio_devices_t out_device);
 
 int voice_start_usecase(struct audio_device *adev, audio_usecase_t usecase_id);
 int voice_stop_usecase(struct audio_device *adev, audio_usecase_t usecase_id);
@@ -81,6 +89,7 @@ int voice_set_parameters(struct audio_device *adev, struct str_parms *parms);
 void voice_get_parameters(struct audio_device *adev, struct str_parms *query,
                           struct str_parms *reply);
 void voice_init(struct audio_device *adev);
+void voice_deinit(struct audio_device *adev);
 bool voice_is_in_call(struct audio_device *adev);
 bool voice_is_in_call_rec_stream(struct stream_in *in);
 int voice_set_mic_mute(struct audio_device *dev, bool state);

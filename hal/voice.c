@@ -42,6 +42,43 @@ struct pcm_config pcm_config_voice_call = {
     .format = PCM_FORMAT_S16_LE,
 };
 
+void set_voice_session_audio_path(struct audio_device * adev, audio_devices_t out_device)
+{
+    enum _AudioPath device_type;
+    int rc;
+
+    switch(out_device) {
+        case AUDIO_DEVICE_OUT_SPEAKER:
+            device_type = SOUND_AUDIO_PATH_SPEAKER;
+            break;
+        case AUDIO_DEVICE_OUT_EARPIECE:
+            device_type = SOUND_AUDIO_PATH_EARPIECE;
+            break;
+        case AUDIO_DEVICE_OUT_WIRED_HEADSET:
+            device_type = SOUND_AUDIO_PATH_HEADSET;
+            break;
+        case AUDIO_DEVICE_OUT_WIRED_HEADPHONE:
+            device_type = SOUND_AUDIO_PATH_HEADPHONE;
+            break;
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO:
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET:
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT:
+            device_type = SOUND_AUDIO_PATH_BLUETOOTH;
+            break;
+        default:
+            /* if output device isn't supported, use earpiece by default */
+            device_type = SOUND_AUDIO_PATH_EARPIECE;
+            break;
+    }
+
+    ALOGV("%s: active_out_devices: 0x%x", __func__, out_device);
+    adev->voice.session_out_device = out_device;
+
+    ALOGV("%s: ril_set_call_audio_path(%d)", __func__, device_type);
+    rc = ril_set_call_audio_path(&adev->voice.ril, device_type);
+    ALOGE_IF(rc != 0, "Failed to set audio path: (%d)", rc);
+}
+
 static struct voice_session *voice_get_session_from_use_case(struct audio_device *adev,
                               audio_usecase_t usecase_id)
 {
@@ -190,6 +227,8 @@ int voice_start_usecase(struct audio_device *adev, audio_usecase_t usecase_id)
         goto error_start_voice;
     }
 
+    ril_set_call_clock_sync(&adev->voice.ril, SOUND_CLOCK_START);
+
     session->state.current = CALL_ACTIVE;
     goto done;
 
@@ -325,6 +364,7 @@ int voice_check_and_set_incall_music_usecase(struct audio_device *adev,
 
 int voice_set_mic_mute(struct audio_device *adev, bool state)
 {
+    enum _MuteCondition mute_condition = state ? TX_MUTE : TX_UNMUTE;
     int err = 0;
 
     adev->voice.mic_mute = state;
@@ -332,6 +372,8 @@ int voice_set_mic_mute(struct audio_device *adev, bool state)
         err = platform_set_mic_mute(adev->platform, state);
     if (adev->mode == AUDIO_MODE_IN_COMMUNICATION)
         err = voice_extn_compress_voip_set_mic_mute(adev, state);
+
+    ril_set_mute(&adev->voice.ril, mute_condition);
 
     return err;
 }
@@ -343,7 +385,29 @@ bool voice_get_mic_mute(struct audio_device *adev)
 
 int voice_set_volume(struct audio_device *adev, float volume)
 {
+    enum _SoundType sound_type;
     int vol, err = 0;
+
+    switch (adev->voice.session_out_device) {
+        case AUDIO_DEVICE_OUT_EARPIECE:
+            sound_type = SOUND_TYPE_VOICE;
+            break;
+        case AUDIO_DEVICE_OUT_SPEAKER:
+            sound_type = SOUND_TYPE_SPEAKER;
+            break;
+        case AUDIO_DEVICE_OUT_WIRED_HEADSET:
+        case AUDIO_DEVICE_OUT_WIRED_HEADPHONE:
+            sound_type = SOUND_TYPE_HEADSET;
+            break;
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO:
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET:
+        case AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT:
+        case AUDIO_DEVICE_OUT_ALL_SCO:
+            sound_type = SOUND_TYPE_BTVOICE;
+            break;
+        default:
+            sound_type = SOUND_TYPE_VOICE;
+    }
 
     adev->voice.volume = volume;
     if (adev->mode == AUDIO_MODE_IN_CALL) {
@@ -365,6 +429,7 @@ int voice_set_volume(struct audio_device *adev, float volume)
     if (adev->mode == AUDIO_MODE_IN_COMMUNICATION)
         err = voice_extn_compress_voip_set_volume(adev, volume);
 
+    ril_set_call_volume(&adev->voice.ril, sound_type, volume);
 
     return err;
 }
@@ -469,7 +534,7 @@ done:
 
 void voice_init(struct audio_device *adev)
 {
-    int i = 0;
+    int ret, i = 0;
 
     memset(&adev->voice, 0, sizeof(adev->voice));
     adev->voice.tty_mode = TTY_MODE_OFF;
@@ -485,6 +550,17 @@ void voice_init(struct audio_device *adev)
     }
 
     voice_extn_init(adev);
+
+    /* Do this as the last step so we do not have to close it on error */
+    ret = ril_open(&adev->voice.ril);
+    if (ret != 0) {
+        ALOGE("%s: Failed to open ril connection, exit code(%d)", __func__, ret);
+    }
+}
+
+void voice_deinit(struct audio_device *adev)
+{
+    ril_close(&adev->voice.ril);
 }
 
 void voice_update_devices_for_all_voice_usecases(struct audio_device *adev)
