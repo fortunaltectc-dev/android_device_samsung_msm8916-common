@@ -37,7 +37,7 @@ static int ril_connect_if_required(struct ril_handle *ril)
     int rc;
 
     if (ril->client == NULL) {
-        ALOGE("ril->client is NULL");
+        ALOGE("%s: ril->client is NULL", __func__);
         return -1;
     }
 
@@ -48,11 +48,12 @@ static int ril_connect_if_required(struct ril_handle *ril)
 
     rc = Connect_RILD(ril->client);
     if (rc != RIL_CLIENT_ERR_SUCCESS) {
-        ALOGE("FATAL: Failed to connect to RILD: %s",
-              strerror(errno));
+        ALOGE("%s: FATAL: Failed to connect to RILD: %s",
+              __func__, strerror(errno));
         return -1;
     }
 
+    ALOGV("%s: Successfully connected to RILD", __func__);
     return 0;
 }
 
@@ -66,7 +67,7 @@ int ril_open(struct ril_handle *ril)
 
     ril->client = OpenClient_RILD();
     if (ril->client == NULL) {
-        ALOGE("OpenClient_RILD() failed");
+        ALOGE("%s: OpenClient_RILD() failed", __func__);
         return -1;
     }
 
@@ -81,6 +82,7 @@ int ril_open(struct ril_handle *ril)
         ril->volume_steps_max = atoi(VOLUME_STEPS_DEFAULT);
     }
 
+    ALOGV("%s: Successfully opened ril client connection", __func__);
     return 0;
 }
 
@@ -94,13 +96,13 @@ int ril_close(struct ril_handle *ril)
 
     rc = Disconnect_RILD(ril->client);
     if (rc != RIL_CLIENT_ERR_SUCCESS) {
-        ALOGE("Disconnect_RILD failed");
+        ALOGE("%s: Disconnect_RILD failed", __func__);
         return -1;
     }
 
     rc = CloseClient_RILD(ril->client);
     if (rc != RIL_CLIENT_ERR_SUCCESS) {
-        ALOGE("CloseClient_RILD() failed");
+        ALOGE("%s: CloseClient_RILD() failed", __func__);
         return -1;
     }
     ril->client = NULL;
@@ -127,6 +129,7 @@ int ril_set_call_volume(struct ril_handle *ril,
         ALOGE("%s: SetCallVolume() failed, rc=%d", __func__, rc);
     }
 
+    ALOGV("%s: SetCallVolume() success, vol=%d", __func__, (int)volume*100);
     return rc;
 }
 
@@ -182,5 +185,6 @@ int ril_set_mute(struct ril_handle *ril, enum _MuteCondition condition)
         ALOGE("%s: SetMute() failed, rc=%d", __func__, rc);
     }
 
+    ALOGV("%s: SetMute() success, rc=%d", __func__, rc);
     return rc;
 }

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "voice"
+#define LOG_TAG "voice_ril_hw"
 /*#define LOG_NDEBUG 0*/
 #define LOG_NDDEBUG 0
 
