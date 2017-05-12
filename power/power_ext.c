@@ -25,6 +25,7 @@
 char* touch_paths[] {
     "/sys/devices/soc.0/i2c.78/i2c-11/11-0020/input/input1/enabled",
     "/sys/devices/soc.0/78b9000.i2c/i2c-5/5-0020/input/input1/enabled",
+    "/sys/devices/soc.0/78b9000.i2c/i2c-5/5-0050/input/input2/enabled",
     "/sys/devices/soc.0/i2c.70/i2c-12/12-0020/input/input2/enabled",
     "/sys/devices/soc.0/78b9000.i2c/i2c-5/5-0020/input/input2/enabled",
     "/sys/devices/soc.0/i2c.70/i2c-12/12-0020/input/input3/enabled",
