@@ -28,6 +28,19 @@ PRODUCT_PACKAGES += \
 	ethertypes \
 	libebtc
 
+#IMS/VoLTE calling support
+PRODUCT_PACKAGES += \
+	com.android.ims \
+	com.android.ims.internal \
+	ims-common \
+	voip-common
+
+PRODUCT_BOOT_JARS += \
+	commonimsinterface \
+	ims-common \
+	imsmanager \
+	voip-common
+
 # libxml2
 PRODUCT_PACKAGES += \
 	libxml2
