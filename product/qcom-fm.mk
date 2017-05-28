@@ -1,8 +1,10 @@
 # FM
-PRODUCT_PACKAGES += \
-	FM2 \
-	libqcomfm_jni \
+PRODUCT_BOOT_JARS += \
 	qcom.fmradio
 
-PRODUCT_BOOT_JARS += \
+PRODUCT_PACKAGES += \
+	FM2_Custom \
+	FMRecord \
+	libfmjni \
+	libqcomfm_jni \
 	qcom.fmradio
