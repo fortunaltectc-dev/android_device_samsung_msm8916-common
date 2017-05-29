@@ -69,28 +69,33 @@
   <string name="regional_band_entry_italy">Italia</string>
   <string name="regional_band_entry_korea">Corea</string>
   <string name="regional_band_entry_mexico">Méxicu</string>
-  <string name="regional_band_summary_austria">Austria (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
+  <string name="regional_band_summary_north_america">Norteamérica (87,5MHz a 108,0MHz en pasos de 200KHz)</string>
+  <string name="regional_band_summary_europe">Europa (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_japan">Xapón (76,0MHz a 90,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_japan_wide">Xapón (amplio) (90,0MHz a 108,0MHz en pasos de 50KHz)</string>
+  <string name="regional_band_summary_australia">Australia (87,7MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_austria">Australia (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
   <string name="regional_band_summary_belgium">Bélxica (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_brazil">Brasil (87,8MHz a 108,0MHz en pasos de 200KHz)</string>
+  <string name="regional_band_summary_brazil">Brasil (87,5MHz a 108,0MHz en pasos de 200KHz)</string>
   <string name="regional_band_summary_china">China (87,0MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_czech_republic">Chequia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_denmark">Dinamarca (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_denmark">Dinamarca (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
   <string name="regional_band_summary_finland">Finlandia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_france">Francia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_germany">Alemaña (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_greece">Grecia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_germany">Alemaña (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
+  <string name="regional_band_summary_greece">Grecia (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
   <string name="regional_band_summary_hong_kong">Ḥong Kong (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_india">India (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_indonesia">Indonesia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_ireland">Irlanda (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_italy">Italia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_ireland">Irlanda (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
+  <string name="regional_band_summary_italy">Italia (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
   <string name="regional_band_summary_korea">Corea (87,5MHz a 108,0MHz en pasos de 200KHz)</string>
   <string name="regional_band_summary_mexico">Méxicu (88,1MHz a 107,9MHz en pasos de 200KHz)</string>
   <string name="regional_band_summary_netherlands">Países Baxos (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_new_zealand">Nueva Zelanda (88,0MHz a 107,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_norway">Noruega (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_poland">Polonia (88,0MHz a 108,0MHz en pasos de 100KHz)</string>
-  <string name="regional_band_summary_portugal">Portugal (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_poland">Polonia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
+  <string name="regional_band_summary_portugal">Portugal (87,5MHz a 108,0MHz en pasos de 50KHz)</string>
   <string name="regional_band_summary_russia">Rusia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_singapore">Singapur (88,0MHz a 108,0MHz en pasos de 100KHz)</string>
   <string name="regional_band_summary_slovakia">Eslovaquia (87,5MHz a 108,0MHz en pasos de 100KHz)</string>
@@ -125,6 +130,7 @@
   <!-- all recordings will show up in the media database with this 'album' name -->
   <string name="audio_db_album_name">Grabaciones FM</string>
   <!-- all recordings will show up in the media database in a playlist with this name -->
+  <string name="user_defind_band_msg">Introduz una frecuencia d\'ente 76.0MHz y 108.0MHz con al menos 1 canal d\'espaciu y 100KHz ente la frecuencia mínima y máxima</string>
   <!-- program types -->
   <string name="typ_News">Anuncies</string>
   <string name="typ_National">Música nacional</string>

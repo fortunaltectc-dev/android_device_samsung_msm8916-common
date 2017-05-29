@@ -535,7 +535,7 @@ public class FMTransmitterService extends Service
       /* Disable Receiver */
       if (mReceiver != null)
       {
-         bStatus = mReceiver.disable();
+         bStatus = mReceiver.disable(this);
          mReceiver = null;
       }
       RText = " ";
@@ -590,7 +590,7 @@ public class FMTransmitterService extends Service
       /* Disable Receiver */
       if (mReceiver != null)
       {
-         bStatus = mReceiver.disable();
+         bStatus = mReceiver.disable(this);
          mReceiver = null;
       }
       try {
@@ -710,7 +710,7 @@ public class FMTransmitterService extends Service
            mFMOn = false;
        }
        if(null != mReceiver) {
-           mReceiver.disable();
+           mReceiver.disable(this);
            mReceiver = null;
        }
        try {
@@ -728,14 +728,14 @@ public class FMTransmitterService extends Service
             throw new RuntimeException("FmTx service not available!");
            }
            if (mReceiver.getFMState() == mReceiver.FMState_Turned_Off) {
-               bStatus = mReceiver.enable(config);
+               bStatus = mReceiver.enable(config, this);
            } else {
                try {
                    Thread.sleep(100);
                } catch (Exception ex) {
                    Log.d( LOGTAG,  "RunningThread InterruptedException");
                }
-               bStatus = mReceiver.enable(config);
+               bStatus = mReceiver.enable(config, this);
            }
            if (!bStatus) {
                Log.e( LOGTAG,  "Search for weak station failed");

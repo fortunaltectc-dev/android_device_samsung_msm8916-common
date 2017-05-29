@@ -221,6 +221,7 @@ public class FMRadio extends Activity
    /* Bottom row in the station info layout */
    private TextView mRadioTextTV;
    private TextView mERadioTextTV;
+   private TextView mEContryCodeTV;
 
    /* Sleep and Recording Messages */
    private TextView mSleepMsgTV;
@@ -453,7 +454,7 @@ public class FMRadio extends Activity
    public void onRestart() {
       Log.d(LOGTAG, "FMRadio: onRestart");
       try {
-         if (null != mService) {
+         if (null != mService && isAntennaAvailable()) {
               mService.requestFocus();
          }
       } catch (Exception e) {
@@ -538,16 +539,27 @@ public class FMRadio extends Activity
       Log.d(LOGTAG, "FMRadio: onResume");
 
       super.onResume();
-
       syncScanState();
 
-      // TODO: We should return on exception or continue?
-      try {
-          if (mService != null)
-              mService.registerCallbacks(mServiceCallbacks);
-      } catch (RemoteException e) {
-          e.printStackTrace();
+      if (mService == null) {
+          Log.d(LOGTAG,"bind callback has not received yet - wait for 100ms");
+          mHandler.postDelayed(UpdateFm, 100);
+          return;
       }
+     mHandler.post(UpdateFm);
+   }
+   Runnable UpdateFm = new Runnable() {
+       public void run() {
+           // TODO: We should return on exception or continue?
+           if (!isAntennaAvailable()) {
+               return;
+           }
+           try {
+               if (mService != null)
+                   mService.registerCallbacks(mServiceCallbacks);
+           } catch (RemoteException e) {
+               e.printStackTrace();
+           }
 
       if (isSleepTimerActive()) {
           Log.d(LOGTAG, "isSleepTimerActive is true");
@@ -592,7 +604,8 @@ public class FMRadio extends Activity
       mUpdatePickerValue = true;
       updateStationInfoToUI();
       enableRadioOnOffUI();
-   }
+       }
+   };
    private static class LoadedDataAndState {
       public LoadedDataAndState(){};
       public boolean onOrOff;
@@ -1445,6 +1458,11 @@ public class FMRadio extends Activity
        return(dlgBuilder.create());
     }
    private void RestoreDefaults() {
+      try {
+          mService.restoreDefaults();
+      } catch (RemoteException e) {
+          e.printStackTrace();
+      }
       FmSharedPreferences.SetDefaults();
       mPrefs.Save();
    }
@@ -2162,7 +2180,7 @@ public class FMRadio extends Activity
                display = station.getName();
                 if (display.length() > 6)
                     display = display.substring(0,6)+"...";
-	       mPresetButtons[buttonIndex].setEllipsize(TextUtils.TruncateAt.END);
+               mPresetButtons[buttonIndex].setEllipsize(TextUtils.TruncateAt.END);
                mPresetButtons[buttonIndex].setText(display);
                mPresetButtons[buttonIndex].setTag(station);
                addedStations++;
@@ -2807,7 +2825,7 @@ public class FMRadio extends Activity
                   mRadioTextTV.setText("");
                   mRadioTextScroller.mOriginalString = getString(R.string.fm_off);
                }else {
-                  //Log.d(LOGTAG, "mUpdateRadioText: Leaving old string " + mRadioTextTV.getText());
+                  Log.v(LOGTAG, "mUpdateRadioText: Leaving old string " + mRadioTextTV.getText());
                }
 
                /* Get PTY and PI and update the display */
@@ -2853,6 +2871,26 @@ public class FMRadio extends Activity
                    mERadioTextTV.setText(str);
                    mERadioTextScroller.mOriginalString = str;
                }
+               mERadioTextScroller.startScroll();
+            }catch (RemoteException e) {
+               e.printStackTrace();
+            }
+         }
+      }
+   };
+
+   Runnable mUpdateExtenCountryCode = new Runnable() {
+      public void run() {
+         String str = "";
+         int value;
+         if ((mService != null) && isFmOn()) {
+            try {
+               /* Get Extended Radio Text and update the display */
+               value = mService.getExtenCountryCode();
+               str = Integer.toString(value);
+               Log.d(LOGTAG, "mUpdateExtenCountryCode: Updatable string: [" + str + "]");
+               mERadioTextTV.setText(str);
+               mERadioTextScroller.mOriginalString = str;
                mERadioTextScroller.startScroll();
             }catch (RemoteException e) {
                e.printStackTrace();
@@ -3171,6 +3209,9 @@ public class FMRadio extends Activity
       public void onExtenRadioTextChanged() {
          mHandler.post(mUpdateExtenRadioText);
       }
+      public void onExtenCountryCodeChanged() {
+         mHandler.post(mUpdateExtenCountryCode);
+      }
       public void onAlternateFrequencyChanged() {
          Log.d(LOGTAG, "mServiceCallbacks.onAlternateFrequencyChanged :");
       }
@@ -3267,6 +3308,40 @@ public class FMRadio extends Activity
           Log.d(LOGTAG, "mServiceCallbacks.onFmAudioPathStopped:");
           mSpeakerButton.setClickable(false);
           mMuteButton.setClickable(false);
+      }
+      /* Not used in FmRadio */
+      public void getSigThCb(int val, int status) {
+          Log.d(LOGTAG,"get Sig Thres callback");
+      }
+      public void getChDetThCb(int val, int status) {
+          Log.d(LOGTAG, "get Channel Det Threshold Callback");
+      }
+      public void setChDetThCb(int status)
+      {
+          Log.d(LOGTAG, "set channel Det Threshold Callback");
+      }
+      public void DefDataRdCb(int val, int status) {
+          Log.d(LOGTAG, "Def data Read callback");
+      }
+      public void DefDataWrtCb(int status)
+      {
+          Log.d(LOGTAG, "DefDataWrt");
+      }
+      public void getBlendCb(int val, int status)
+      {
+          Log.d(LOGTAG, "get blend callback");
+      }
+      public void setBlendCb(int status)
+      {
+          Log.d(LOGTAG, "set blend callback");
+      }
+      public void getStationParamCb(int val, int status)
+      {
+          Log.d(LOGTAG, "getStationParam");
+      }
+      public void getStationDbgParamCb(int val, int status)
+      {
+          Log.d(LOGTAG, "getStationDbgParam");
       }
    };
 

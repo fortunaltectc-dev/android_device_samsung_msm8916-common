@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -185,8 +185,10 @@ public class FMRadioService extends Service
    //Track FM playback for reenter App usecases
    private boolean mPlaybackInProgress = false;
    private boolean mStoppedOnFocusLoss = false;
+   private boolean mStoppedOnFactoryReset = false;
    private File mSampleFile = null;
    long mSampleStart = 0;
+   int mSampleLength = 0;
    // Messages handled in FM Service
    private static final int FM_STOP =1;
    private static final int RESET_NOTCH_FILTER =2;
@@ -239,18 +241,19 @@ public class FMRadioService extends Service
    private boolean mIsRecordSink = false;
    private static final int AUDIO_FRAMES_COUNT_TO_IGNORE = 3;
    private Object mRecordSinkLock = new Object();
+   private Object mEventWaitLock = new Object();
    private boolean mIsFMDeviceLoopbackActive = false;
    private File mStoragePath = null;
+   private static final int FM_OFF_FROM_APPLICATION = 1;
+   private static final int FM_OFF_FROM_ANTENNA = 2;
+   private static final int RADIO_TIMEOUT = 1500;
+
+   private static Object mNotchFilterLock = new Object();
 
    private Notification.Builder mRadioNotification;
    private Notification mNotificationInstance;
    private NotificationManager mNotificationManager;
    private SettingsContentObserver mSettingsContentObserver;
-
-   private static final int FM_OFF_FROM_APPLICATION = 1;
-   private static final int FM_OFF_FROM_ANTENNA = 2;
-
-   private static Object mNotchFilterLock = new Object();
 
    public FMRadioService() {
    }
@@ -641,6 +644,7 @@ public class FMRadioService extends Service
      */
     public void registerHeadsetListener() {
         if (mHeadsetReceiver == null) {
+            boolean fm_a2dp_disabled = SystemProperties.getBoolean("fm.a2dp.conc.disabled",true);
             mHeadsetReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
@@ -685,7 +689,8 @@ public class FMRadioService extends Service
                             mA2dpDisconnected = false;
                             mA2dpConnected = true;
                         }
-                        configureAudioDataPath(true);
+                        if (isFmOn())
+                            configureAudioDataPath(true);
                     } else if (action.equals("HDMI_CONNECTED")) {
                         //FM should be off when HDMI is connected.
                         fmOff();
@@ -704,16 +709,19 @@ public class FMRadioService extends Service
                         }
                     } else if( action.equals(Intent.ACTION_SHUTDOWN)) {
                         mAppShutdown = true;
+                        if (isFmRecordingOn()) {
+                            stopRecording();
+                        }
                     }
 
                 }
             };
             AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            mA2dpConnected = am.isBluetoothA2dpOn();
-            mA2dpDisconnected = !mA2dpConnected;
             IntentFilter iFilter = new IntentFilter();
             iFilter.addAction(Intent.ACTION_HEADSET_PLUG);
-            iFilter.addAction(mA2dpDeviceState.getActionSinkStateChangedString());
+            if (!fm_a2dp_disabled) {
+                iFilter.addAction(mA2dpDeviceState.getActionSinkStateChangedString());
+            }
             iFilter.addAction("HDMI_CONNECTED");
             iFilter.addAction(Intent.ACTION_SHUTDOWN);
             iFilter.addCategory(Intent.CATEGORY_DEFAULT);
@@ -768,13 +776,9 @@ public class FMRadioService extends Service
                         String cmd = intent.getStringExtra("command");
                         Log.d(LOGTAG, "Music Service command : "+cmd+ " received");
                         if (cmd != null && cmd.equals("pause")) {
-                            if (mA2dpDisconnected) {
-                                Log.d(LOGTAG, "not to pause,this is a2dp disconnected's pause");
-                                mA2dpDisconnected = false;
-                                return;
-                            }
                             if (isFmOn()) {
                                 fmOperationsOff();
+                                mStoppedOnFocusLoss = true;
                                 if (isOrderedBroadcast()) {
                                     abortBroadcast();
                                 }
@@ -1015,13 +1019,28 @@ public class FMRadioService extends Service
                        && (key_action == KeyEvent.ACTION_DOWN)) {
                 Log.d(LOGTAG, "SessionCallback: MEDIA_PLAY");
                 if (isAntennaAvailable() && mServiceInUse) {
-                    fmOn();
-                    try {
-                        if (mCallbacks != null ) {
-                            mCallbacks.onEnabled();
+                    if (isFmOn()){
+                        //FM should be off when Headset hook pressed.
+                        fmOff();
+                        try {
+                            /* Notify the UI/Activity, only if the service is "bound"
+                             * by an activity and if Callbacks are registered
+                             * */
+                            if ((mServiceInUse) && (mCallbacks != null) ) {
+                                mCallbacks.onDisabled();
+                            }
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
                         }
-                    } catch (RemoteException e) {
-                        e.printStackTrace();
+                    } else {
+                        fmOn();
+                        try {
+                            if (mCallbacks != null ) {
+                                mCallbacks.onEnabled();
+                            }
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
                     }
                     return true;
                 }
@@ -1093,41 +1112,29 @@ public class FMRadioService extends Service
 
        mStoppedOnFocusLoss = false;
 
-       if (!mA2dpDeviceState.isDeviceAvailable()) {
-           Log.d(LOGTAG, "FMRadio: Requesting to start FM");
-           //reason for resending the Speaker option is we are sending
-           //ACTION_FM=1 to AudioManager, the previous state of Speaker we set
-           //need not be retained by the Audio Manager.
-           if (isSpeakerEnabled()) {
-               mSpeakerPhoneOn = true;
-               Log.d(LOGTAG, "Audio source set it as speaker");
+       if (mStoppedOnFactoryReset) {
+           mStoppedOnFactoryReset = false;
+           mSpeakerPhoneOn = false;
+       // In FM stop, the audio route is set to default audio device
+       } else if (mSpeakerPhoneOn) {
+               String temp = mA2dpConnected ? "A2DP HS" : "Speaker";
+               Log.d(LOGTAG, "Route audio to " + temp);
                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_SPEAKER);
-           } else {
-               Log.d(LOGTAG, "Audio source set it as headset");
-               AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
-           }
+               if (mA2dpConnected) {
+                    mAudioManager.setMode(AudioManager.MODE_IN_CALL);
+                    mAudioManager.setSpeakerphoneOn(true);
+                    mAudioManager.setParameters("fm_mode=on");
+                    mAudioManager.setParameters("fm_radio_volume=on");
+                    mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
+               }
        } else {
-               Log.d(LOGTAG, "A2DP is connected, set audio source to A2DP HS");
-               AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_SPEAKER);
-               mSpeakerPhoneOn = true;
-       }
-
-       if (mSpeakerPhoneOn) {
-           if (mA2dpConnected) {
-               mAudioManager.setMode(AudioManager.MODE_IN_CALL);
-               mAudioManager.setSpeakerphoneOn(true);
-               mAudioManager.setParameters("fm_mode=on");
-               mAudioManager.setParameters("fm_radio_volume=on");
-               mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
-           }
-       } else {
-           mAudioManager.setMode(AudioManager.MODE_IN_CALL);
-           mAudioManager.setSpeakerphoneOn(false);
-           mAudioManager.setParameters("fm_mode=on");
-           mAudioManager.setParameters("fm_radio_volume=on");
-           mAudioManager.setParameters("fm_mute=0");
-           mAudioManager.setParameters("fm_radio_mute=0");
-           mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
+            mAudioManager.setMode(AudioManager.MODE_IN_CALL);
+            mAudioManager.setSpeakerphoneOn(false);
+            mAudioManager.setParameters("fm_mode=on");
+            mAudioManager.setParameters("fm_radio_volume=on");
+            mAudioManager.setParameters("fm_mute=0");
+            mAudioManager.setParameters("fm_radio_mute=0");
+            mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
        }
 
        mPlaybackInProgress = true;
@@ -1175,30 +1182,30 @@ public class FMRadioService extends Service
        return status;
    }
 
-   private File createTempFile(String prefix, String suffix, File directory)
-           throws IOException {
-       // Force a prefix null check first
-       if (prefix.length() < 3) {
-           throw new IllegalArgumentException("prefix must be at least 3 characters");
-       }
-       if (suffix == null) {
-           suffix = ".tmp";
-       }
-       File tmpDirFile = directory;
-       if (tmpDirFile == null) {
-           String tmpDir = System.getProperty("java.io.tmpdir", ".");
-           tmpDirFile = new File(tmpDir);
-       }
+    private File createTempFile(String prefix, String suffix, File directory)
+            throws IOException {
+        // Force a prefix null check first
+        if (prefix.length() < 3) {
+            throw new IllegalArgumentException("prefix must be at least 3 characters");
+        }
+        if (suffix == null) {
+            suffix = ".tmp";
+        }
+        File tmpDirFile = directory;
+        if (tmpDirFile == null) {
+            String tmpDir = System.getProperty("java.io.tmpdir", ".");
+            tmpDirFile = new File(tmpDir);
+        }
 
-       String nameFormat = getResources().getString(R.string.def_save_name_format);
-       SimpleDateFormat df = new SimpleDateFormat(nameFormat);
-       String currentTime = df.format(System.currentTimeMillis());
+        String nameFormat = getResources().getString(R.string.def_save_name_format);
+        SimpleDateFormat df = new SimpleDateFormat(nameFormat);
+        String currentTime = df.format(System.currentTimeMillis());
 
-       File result;
-       do {
-           result = new File(tmpDirFile, prefix + currentTime + suffix);
-       } while (!result.createNewFile());
-       return result;
+        File result;
+        do {
+            result = new File(tmpDirFile, prefix + currentTime + suffix);
+        } while (!result.createNewFile());
+        return result;
    }
 
    public boolean startRecording() {
@@ -1259,11 +1266,11 @@ public class FMRadioService extends Service
         try {
             if (getResources().getBoolean(R.bool.def_save_name_format_enabled)) {
                 String suffix = getResources().getString(R.string.def_save_name_suffix);
-                suffix = "".equals(suffix) ? ".3gpp" : suffix;
+                suffix = "".equals(suffix) ? ".aac" : suffix;
                 String prefix = getResources().getString(R.string.def_save_name_prefix) + '-';
                 mSampleFile = createTempFile(prefix, suffix, sampleDir);
             } else {
-                mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
+                mSampleFile = File.createTempFile("FMRecording", ".aac", sampleDir);
             }
         } catch (IOException e) {
             Log.e(LOGTAG, "Not able to access SD Card");
@@ -1334,7 +1341,7 @@ public class FMRadioService extends Service
         });
 
         mSampleStart = SystemClock.elapsedRealtime();
-        Log.d(LOGTAG, "mSampleStart: " +mSampleStart);
+        Log.d(LOGTAG, "Sample start time: " +mSampleStart);
         return true;
   }
 
@@ -1357,8 +1364,10 @@ public class FMRadioService extends Service
        } catch(Exception e) {
              e.printStackTrace();
        }
-       int sampleLength = (int)((System.currentTimeMillis() - mSampleStart)/1000 );
-       if (sampleLength == 0)
+       mSampleLength = (int)(SystemClock.elapsedRealtime() - mSampleStart);
+       Log.d(LOGTAG, "Sample length is " + mSampleLength);
+
+       if (mSampleLength == 0)
            return;
        String state = Environment.getExternalStorageState(mStoragePath);
        Log.d(LOGTAG, "storage state is " + state);
@@ -1403,7 +1412,7 @@ public class FMRadioService extends Service
        // Lets label the recorded audio file as NON-MUSIC so that the file
        // won't be displayed automatically, except for in the playlist.
        cv.put(MediaStore.Audio.Media.IS_MUSIC, "1");
-
+       cv.put(MediaStore.Audio.Media.DURATION, mSampleLength);
        cv.put(MediaStore.Audio.Media.TITLE, title);
        cv.put(MediaStore.Audio.Media.DATA, file.getAbsolutePath());
        cv.put(MediaStore.Audio.Media.DATE_ADDED, (int) (current / 1000));
@@ -1502,6 +1511,7 @@ public class FMRadioService extends Service
    //any. Similarly once call is ended FM should be unmuted.
        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
        mCallStatus = state;
+       int granted = AudioManager.AUDIOFOCUS_REQUEST_FAILED, count = 0;
 
        if((TelephonyManager.CALL_STATE_OFFHOOK == state)||
           (TelephonyManager.CALL_STATE_RINGING == state)) {
@@ -1536,9 +1546,21 @@ public class FMRadioService extends Service
               if (isAntennaAvailable() && (!isFmOn()) && mServiceInUse)
               {
                    Log.d(LOGTAG, "Resuming after call:");
+                   do {
+                       granted = audioManager.requestAudioFocus(mAudioFocusListener,
+                               AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+                       ++count;
+                       try {
+                           Thread.sleep(100);
+                       } catch (Exception ex) {
+                           Log.d( LOGTAG, "InterruptedException");
+                       }
+                   } while(granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED && count != 3);
+
                    if(true != fmOn()) {
                        return;
                    }
+
                    mResumeAfterCall = false;
                    if(mCallbacks != null) {
                       try {
@@ -1642,10 +1664,12 @@ public class FMRadioService extends Service
                   return;
               }
               switch (msg.arg1) {
-                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                      Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK");
                   case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT");
+                      if (true == isFmRecordingOn())
+                          stopRecording();
+                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                      Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK");
                       if (true == mPlaybackInProgress) {
                           stopFM();
                           mStoppedOnFocusLoss = true;
@@ -1654,8 +1678,6 @@ public class FMRadioService extends Service
                   case AudioManager.AUDIOFOCUS_LOSS:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS");
                       //intentional fall through.
-                      if (true == isFmRecordingOn())
-                          stopRecording();
                       if (mSpeakerPhoneOn) {
                          mSpeakerDisableHandler.removeCallbacks(mSpeakerDisableTask);
                          mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
@@ -1663,17 +1685,22 @@ public class FMRadioService extends Service
                       if (true == mPlaybackInProgress) {
                           stopFM();
                       }
+                      if (true == isFmRecordingOn())
+                          stopRecording();
+
                       if (mSpeakerPhoneOn) {
                           if (isAnalogModeSupported())
                               setAudioPath(false);
                       }
                       mStoppedOnFocusLoss = true;
+                      mSession.setActive(false);
                       break;
                   case AudioManager.AUDIOFOCUS_GAIN:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_GAIN");
                       if(false == mPlaybackInProgress)
                           startFM();
                       mStoppedOnFocusLoss = false;
+                      mSession.setActive(true);
                       break;
                   default:
                       Log.e(LOGTAG, "Unknown audio focus change code"+msg.arg1);
@@ -1908,6 +1935,7 @@ public class FMRadioService extends Service
 
       public void enableSpeaker(boolean speakerOn)
       {
+
           mService.get().enableSpeaker(speakerOn);
       }
 
@@ -2032,9 +2060,17 @@ public class FMRadioService extends Service
       {
           return (mService.get().setIntfDetLowTh(intfLowTh));
       }
+      public boolean getIntfDetLowTh()
+      {
+          return (mService.get().getIntfDetLowTh());
+      }
       public boolean setIntfDetHighTh(int intfHighTh)
       {
           return (mService.get().setIntfDetHighTh(intfHighTh));
+      }
+      public boolean getIntfDetHighTh()
+      {
+          return (mService.get().getIntfDetHighTh());
       }
       public int getSearchAlgoType()
       {
@@ -2104,6 +2140,10 @@ public class FMRadioService extends Service
       {
            return (mService.get().setRxRepeatCount(count));
       }
+      public boolean getRxRepeatCount()
+      {
+           return (mService.get().getRxRepeatCount());
+      }
       public long getRecordingStartTime()
       {
            return (mService.get().getRecordingStartTime());
@@ -2112,22 +2152,33 @@ public class FMRadioService extends Service
       {
            return (mService.get().isSleepTimerActive());
       }
-
       public boolean isSSRInProgress()
       {
          return(mService.get().isSSRInProgress());
       }
-
       public boolean isA2DPConnected()
       {
          return(mService.get().isA2DPConnected());
       }
+
       public boolean isSearchInProgress()
       {
          return(mService.get().isSearchInProgress());
       }
-      public List<Integer> getScannedFrequencies() {
-          return(mService.get().getScannedFrequencies());
+
+      public List<Integer> getScannedFrequencies()
+      {
+         return(mService.get().getScannedFrequencies());
+      }
+
+      public int getExtenCountryCode()
+      {
+         return(mService.get().getExtenCountryCode());
+      }
+
+      public void restoreDefaults()
+      {
+         mService.get().restoreDefaults();
       }
    }
    private final IBinder mBinder = new ServiceStub(this);
@@ -2198,7 +2249,7 @@ public class FMRadioService extends Service
             Log.d(LOGTAG, "fmOn: RdsStd      :"+ config.getRdsStd());
             Log.d(LOGTAG, "fmOn: LowerLimit  :"+ config.getLowerLimit());
             Log.d(LOGTAG, "fmOn: UpperLimit  :"+ config.getUpperLimit());
-            bStatus = mReceiver.enable(FmSharedPreferences.getFMConfiguration());
+            bStatus = mReceiver.enable(FmSharedPreferences.getFMConfiguration(), this);
             if (isSpeakerEnabled()) {
                 setAudioPath(false);
             } else {
@@ -2232,7 +2283,10 @@ public class FMRadioService extends Service
                 bStatus = mReceiver.registerRdsGroupProcessing(FmReceiver.FM_RX_RDS_GRP_RT_EBL|
                                                            FmReceiver.FM_RX_RDS_GRP_PS_EBL|
                                                            FmReceiver.FM_RX_RDS_GRP_AF_EBL|
-                                                           FmReceiver.FM_RX_RDS_GRP_PS_SIMPLE_EBL);
+                                                           FmReceiver.FM_RX_RDS_GRP_PS_SIMPLE_EBL|
+                                                           FmReceiver.FM_RX_RDS_GRP_ECC_EBL|
+                                                           FmReceiver.FM_RX_RDS_GRP_PTYN_EBL|
+                                                           FmReceiver.FM_RX_RDS_GRP_RT_PLUS_EBL);
                 Log.d(LOGTAG, "registerRdsGroupProcessing done, Status :" +  bStatus);
             }
             bStatus = enableAutoAF(FmSharedPreferences.getAutoAFSwitch());
@@ -2261,10 +2315,45 @@ public class FMRadioService extends Service
       return(bStatus);
    }
 
+   private void resetAudioRoute() {
+       if (isSpeakerEnabled() == true) {
+           if (mA2dpConnected == true) {
+               Log.d(LOGTAG, "A2DP connected, de-select BT");
+               AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NO_BT_A2DP);
+               mAudioManager.setMode(AudioManager.MODE_IN_CALL);
+               mAudioManager.setSpeakerphoneOn(false);
+               mAudioManager.setParameters("fm_mode=on");
+               mAudioManager.setParameters("fm_radio_volume=on");
+               mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
+           } else {
+               Log.d(LOGTAG, "A2DP is not connected, force none");
+               AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
+               mAudioManager.setMode(AudioManager.MODE_IN_CALL);
+               mAudioManager.setSpeakerphoneOn(false);
+               mAudioManager.setParameters("fm_mode=on");
+               mAudioManager.setParameters("fm_radio_volume=on");
+               mAudioManager.setParameters("fm_mute=0");
+               mAudioManager.setParameters("fm_radio_mute=0");
+               mAudioManager.setParameters("FMRadioVol=" + GetMusicStreamVol());
+           }
+       }
+   }
+
   /*
    * Turn OFF FM Operations: This disables all the current FM operations             .
    */
    private void fmOperationsOff() {
+     // disable audio path
+      AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+      if(audioManager != null)
+      {
+         Log.d(LOGTAG, "audioManager.setFmRadioOn = false \n" );
+         stopFM();
+         unMute();
+         audioManager.abandonAudioFocus(mAudioFocusListener);
+         //audioManager.setParameters("FMRadioOn=false");
+         Log.d(LOGTAG, "audioManager.setFmRadioOn false done \n" );
+      }
       // stop recording
       if (isFmRecordingOn())
       {
@@ -2276,17 +2365,9 @@ public class FMRadioService extends Service
                return;
           }
       }
-      // disable audio path
-      AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-      if(audioManager != null)
-      {
-         Log.d(LOGTAG, "audioManager.setFmRadioOn = false \n" );
-         stopFM();
-         Log.d(LOGTAG, "audioManager.setFmRadioOn false done \n" );
-      }
       // reset FM audio settings
-      if (isSpeakerEnabled() == true)
-          enableSpeaker(false);
+      resetAudioRoute();
+
       if (isMuted() == true)
           unMute();
 
@@ -2295,6 +2376,7 @@ public class FMRadioService extends Service
               misAnalogPathEnabled = false;
       }
    }
+
 
   /*
    * Reset (OFF) FM Operations: This resets all the current FM operations             .
@@ -2338,28 +2420,36 @@ public class FMRadioService extends Service
    private boolean fmOff() {
       boolean bStatus=false;
 
-      fmOperationsOff();
-
       // This will disable the FM radio device
       if (mReceiver != null)
       {
-         bStatus = mReceiver.disable();
+         bStatus = mReceiver.disable(this);
+         if (bStatus &&
+                 (mReceiver.getFMState() == mReceiver.subPwrLevel_FMTurning_Off)) {
+             synchronized (mEventWaitLock) {
+                 Log.d(LOGTAG, "waiting for disable event");
+                 try {
+                     mEventWaitLock.wait(RADIO_TIMEOUT);
+                 } catch (IllegalMonitorStateException e) {
+                     Log.e(LOGTAG, "Exception caught while waiting for event");
+                     e.printStackTrace();
+                 } catch (InterruptedException ex) {
+                     Log.e(LOGTAG, "Exception caught while waiting for event");
+                     ex.printStackTrace();
+                 }
+             }
+         }
          mReceiver = null;
       }
+      fmOperationsOff();
       stop();
       return(bStatus);
    }
-
 
    private boolean fmOff(int off_from) {
        if (off_from == FM_OFF_FROM_APPLICATION || off_from == FM_OFF_FROM_ANTENNA) {
            Log.d(LOGTAG, "FM application close button pressed or antenna removed");
            mSession.setActive(false);
-           AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-           if (audioManager != null)
-               audioManager.abandonAudioFocus(mAudioFocusListener);
-           else
-               Log.d(LOGTAG, "Failed to get Audio Service");
        }
        return fmOff();
    }
@@ -2856,6 +2946,16 @@ public class FMRadioService extends Service
       Log.d(LOGTAG, "eRadio Text:[" + str +"]");
       return str;
    }
+   public int  getExtenCountryCode() {
+      int val = 0;
+      if (mFMRxRDSData != null)
+      {
+         val = mFMRxRDSData.getECountryCode();
+      }
+      Log.d(LOGTAG, "eCountry Code :[" + val +"]");
+      return val;
+   }
+
    /* Retrieves the RDS Program Type (PTY) code.
     *
     * @return int - RDS PTY code.
@@ -3108,6 +3208,9 @@ public class FMRadioService extends Service
          Log.d(LOGTAG, "FmRxEvDisableReceiver");
          mFMOn = false;
          FmSharedPreferences.clearTags();
+         synchronized (mEventWaitLock) {
+             mEventWaitLock.notify();
+         }
       }
       public void FmRxEvRadioReset()
       {
@@ -3179,6 +3282,7 @@ public class FMRadioService extends Service
       {
          Log.d(LOGTAG, "FmRxEvSetSignalThreshold");
       }
+
       public void FmRxEvRadioTuneStatus(int frequency)
       {
          Log.d(LOGTAG, "FmRxEvRadioTuneStatus: Tuned Frequency: " +frequency);
@@ -3254,10 +3358,113 @@ public class FMRadioService extends Service
              Log.d(LOGTAG, "FmRxEvServiceAvailable: Tuned frequency is below signal threshold level");
          }
       }
-      public void FmRxEvGetSignalThreshold()
+      public void FmRxEvGetSignalThreshold(int val, int status)
       {
          Log.d(LOGTAG, "FmRxEvGetSignalThreshold");
+
+         if (mCallbacks != null) {
+             try {
+                 mCallbacks.getSigThCb(val, status);
+             } catch (RemoteException e) {
+                 Log.e(LOGTAG, "FmRxEvGetSignalThreshold: Exception:" + e.toString());
+             }
+         }
       }
+
+      public void FmRxEvGetChDetThreshold(int val, int status)
+      {
+          Log.e(LOGTAG, "FmRxEvGetChDetThreshold");
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.getChDetThCb(val, status);
+              } catch (RemoteException e) {
+                  Log.e(LOGTAG, "FmRxEvGetChDetThreshold: Exception = " + e.toString());
+              }
+          }
+      }
+
+      public void FmRxEvSetChDetThreshold(int status)
+      {
+          Log.e(LOGTAG, "FmRxEvSetChDetThreshold");
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.setChDetThCb(status);
+              } catch (RemoteException e) {
+                    e.printStackTrace();
+              }
+          }
+      }
+
+      public void FmRxEvDefDataRead(int val, int status) {
+          Log.e(LOGTAG, "FmRxEvDefDataRead");
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.DefDataRdCb(val, status);
+              } catch (RemoteException e) {
+                  Log.e(LOGTAG, "FmRxEvDefDataRead: Exception = " + e.toString());
+              }
+          }
+      }
+
+      public void FmRxEvDefDataWrite(int status)
+      {
+          Log.e(LOGTAG, "FmRxEvDefDataWrite");
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.DefDataWrtCb(status);
+              } catch (RemoteException e) {
+                  e.printStackTrace();
+              }
+          }
+      }
+
+      public void FmRxEvGetBlend(int val, int status)
+      {
+          Log.e(LOGTAG, "FmRxEvGetBlend");
+
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.getBlendCb(val, status);
+              } catch (RemoteException e) {
+                  e.printStackTrace();
+              }
+          }
+      }
+
+      public void FmRxEvSetBlend(int status)
+      {
+          Log.e(LOGTAG, "FmRxEvSetBlend");
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.setBlendCb(status);
+              } catch (RemoteException e) {
+                  e.printStackTrace();
+              }
+          }
+      }
+
+      public void FmRxGetStationParam(int val, int status)
+      {
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.getStationParamCb(val, status);
+              } catch (RemoteException e) {
+                  e.printStackTrace();
+              }
+          }
+      }
+
+      public void FmRxGetStationDbgParam(int val, int status)
+      {
+          if (mCallbacks != null) {
+              try {
+                  mCallbacks.getStationDbgParamCb(val, status);
+              } catch (RemoteException e) {
+                  e.printStackTrace();
+              }
+          }
+      }
+
       public void FmRxEvSearchInProgress()
       {
          Log.d(LOGTAG, "FmRxEvSearchInProgress");
@@ -3412,6 +3619,19 @@ public class FMRadioService extends Service
              e.printStackTrace();
          }
       }
+      public void FmRxEvECCInfo()
+      {
+         Log.d(LOGTAG, "FmRxEvECCInfo");
+         try {
+             if (mReceiver != null) {
+                mFMRxRDSData = mReceiver.getECCInfo();
+                if(mCallbacks != null)
+                   mCallbacks.onExtenCountryCodeChanged();
+             }
+         } catch (RemoteException e) {
+             e.printStackTrace();
+         }
+      }
       public void FmRxEvRdsPiMatchAvailable()
       {
          Log.d(LOGTAG, "FmRxEvRdsPiMatchAvailable");
@@ -3492,11 +3712,25 @@ public class FMRadioService extends Service
       else
          return false;
    }
+   public boolean getIntfDetLowTh()
+   {
+       if (mReceiver != null)
+           return mReceiver.getOnChannelThreshold();
+       else
+           return false;
+   }
    public boolean setIntfDetHighTh(int intfHighTh) {
       if(mReceiver != null)
          return mReceiver.setOffChannelThreshold(intfHighTh);
       else
          return false;
+   }
+   public boolean getIntfDetHighTh()
+   {
+       if (mReceiver != null)
+           return mReceiver.getOffChannelThreshold();
+       else
+           return false;
    }
    public int getSearchAlgoType() {
        if(mReceiver != null)
@@ -3646,7 +3880,12 @@ public class FMRadioService extends Service
       else
          return false;
    }
-
+   public boolean getRxRepeatCount() {
+      if(mReceiver != null)
+         return mReceiver.getPSRxRepeatCount();
+      else
+         return false;
+   }
    public long getRecordingStartTime() {
       return mSampleStart;
    }
@@ -3693,12 +3932,13 @@ public class FMRadioService extends Service
        public void onServiceConnected(int profile, BluetoothProfile proxy) {
            mA2dpProfile = (BluetoothA2dp) proxy;
            mA2dpDeviceList = mA2dpProfile.getConnectedDevices();
-
-           if (mA2dpDeviceList == null)
+           if (mA2dpDeviceList == null || mA2dpDeviceList.size() == 0)
                mA2dpConnected = false;
            else
                mA2dpConnected = true;
+
            mA2dpDisconnected = !mA2dpConnected;
+           mSpeakerPhoneOn = mA2dpConnected;
            Log.d(LOGTAG, "A2DP Status: " + mA2dpConnected);
        }
 
@@ -3715,5 +3955,9 @@ public class FMRadioService extends Service
                                        BluetoothProfile.A2DP)) {
            Log.d(LOGTAG, "Failed to get A2DP profile proxy");
        }
+   }
+
+   private void restoreDefaults () {
+        mStoppedOnFactoryReset = true;
    }
 }

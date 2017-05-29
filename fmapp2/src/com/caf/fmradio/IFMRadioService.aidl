@@ -53,6 +53,7 @@ interface IFMRadioService
     boolean setIntfDetLowTh(int intfLowTh);
     boolean setIntfDetHighTh(int intfHighTh);
     String getExtenRadioText();
+    int getExtenCountryCode();
     int getSinrSamplesCnt();
     int getSinrTh();
     int getSearchAlgoType();
@@ -77,5 +78,9 @@ interface IFMRadioService
     boolean isA2DPConnected();
     boolean isSearchInProgress();
     List getScannedFrequencies();
+    boolean getIntfDetLowTh();
+    boolean getIntfDetHighTh();
+    boolean getRxRepeatCount();
+    void restoreDefaults();
 }
 
