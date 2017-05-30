@@ -22,7 +22,7 @@ TARGET_SPECIFIC_HEADER_PATH := $(PLATFORM_PATH)/include
 TARGET_SYSTEM_PROP := $(PLATFORM_PATH)/system.prop
 
 # Inherit from common
--include device/samsung/qcom-common/BoardConfigCommon.mk
+#-include device/samsung/qcom-common/BoardConfigCommon.mk
 
 # Include board config fragments
 include $(PLATFORM_PATH)/board/*.mk
