@@ -45,7 +45,7 @@ vendor/lib/libmmcamera_faceproc.so|8e6a95d0dd0d282f96cc905c11c1a738
 
 # Connectivity Engine - wf-crackling-7.1-TOS093F-a29b96e3d6
 etc/permissions/cneapiclient.xml|7293393dee2ad057699836528a1dc4e9
-framework/cneapiclient.jar|5708e3d4beeb51720e428d5e497ce6c7
+-framework/cneapiclient.jar|5708e3d4beeb51720e428d5e497ce6c7
 vendor/lib/libcneapiclient.so|0b79fa7c17c94f20531c980e99171c60
 
 # DRM
@@ -133,26 +133,30 @@ etc/firmware/ice40.bin
 etc/firmware/leia_pfp_470.fw
 etc/firmware/leia_pm4_470.fw
 
+
+# IMS/VoLTE - wf-crackling-7.1-TOS093F-a29b96e3d6
+-framework/imscmlibrary.jar|3347393b41caa283c7b0401250a89f71
+-vendor/app/imssettings/imssettings.apk|e3be6fbb1b9396074e5082f0615ca1f3
+vendor/lib/libimscamera_jni.so|36340076acb435d5641d3e76583270cf
+vendor/lib/libimsmedia_jni.so|2f91b451055563f5505f4f92ad3c5a11
+
+etc/permissions/rcs_service_aidl.xml|95f296908c63f74fc2e7fe9da12af4d0
+etc/permissions/rcs_service_api.xml|cd6c2d9814f55446d30fda7ff5efbead
+-framework/rcsimssettings.jar|e92f11a163047edb6ebca94bd76a1e4f
+-framework/rcs_service_aidl.jar|fe1cd4a036f74d4040f69da3ad011897
+-framework/rcs_service_api.jar|dc8b663085c50afe660991f0b15fa633
+-framework/rcsservice.jar|3d0ab65d34cf3d5e83afd299f79ceebb
+
 #IMS/VoLTE
--app/imsservice/imsservice.apk
--app/ImsSettings/ImsSettings.apk
--app/ImsTelephonyService/ImsTelephonyService.apk
 bin/imscmservice
 bin/imsdatadaemon
 bin/imsqmidaemon
 bin/ims_rtp_daemon
 etc/init.qti.ims.sh
 etc/permissions/imscm.xml
-etc/permissions/imsmanager_library.xml
-etc/permissions/rcsopenapi_library.xml
--framework/commonimsinterface.jar
--framework/imsmanager-internal.jar
--framework/imsmanager.jar
--framework/rcsopenapi.jar
 lib/libapve-client.so
 lib/libcpve-client.so
 lib/libims_engine.so
--priv-app/ImsLogger+/ImsLogger+.apk
 vendor/lib/lib-dplmedia.so
 vendor/lib/lib-imsdpl.so
 vendor/lib/lib-imsqimf.so

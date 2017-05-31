@@ -36,9 +36,7 @@ PRODUCT_PACKAGES += \
 	voip-common
 
 PRODUCT_BOOT_JARS += \
-	commonimsinterface \
 	ims-common \
-	imsmanager \
 	voip-common
 
 # libxml2
