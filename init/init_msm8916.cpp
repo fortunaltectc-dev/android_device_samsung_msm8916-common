@@ -27,7 +27,7 @@
    IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "init_msm8916.h"
+#include <init_msm8916.h>
 
 #define VERSION_RELEASE "6.0.1"
 #define BUILD_ID	"MOB31T"
