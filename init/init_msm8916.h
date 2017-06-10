@@ -30,6 +30,20 @@
 #ifndef __INIT_MSM8916__H__
 #define __INIT_MSM8916__H__
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "vendor_init.h"
+#include "property_service.h"
+#include "log.h"
+#include "util.h"
+
+#define CDMA_DEVICE 0
+#define GSM_DEVICE  1
+#define LTE_DEVICE  2
+#define WIFI_DEVICE 3
+
 void init_target_properties();
 
 

@@ -27,21 +27,7 @@
    IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "vendor_init.h"
-#include "property_service.h"
-#include "log.h"
-#include "util.h"
-
 #include "init_msm8916.h"
-
-#define CDMA_DEVICE 0
-#define GSM_DEVICE  1
-#define LTE_DEVICE  2
-#define WIFI_DEVICE 3
 
 #define VERSION_RELEASE "6.0.1"
 #define BUILD_ID	"MOB31T"
