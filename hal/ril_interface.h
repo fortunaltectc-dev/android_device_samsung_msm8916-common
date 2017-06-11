@@ -17,7 +17,7 @@
 #ifndef RIL_INTERFACE_H
 #define RIL_INTERFACE_H
 
-#include <secril-client.h>
+#include <audio-ril.h>
 
 struct ril_handle
 {

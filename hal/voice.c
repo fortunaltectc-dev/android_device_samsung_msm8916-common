@@ -436,13 +436,19 @@ int voice_set_volume(struct audio_device *adev, float volume)
 
 int voice_start_call(struct audio_device *adev)
 {
-    int ret = 0;
+    int ret = 0, rc = -1;
 
     ret = voice_extn_start_call(adev);
     if (ret == -ENOSYS) {
         ret = voice_start_usecase(adev, USECASE_VOICE_CALL);
     }
     adev->voice.in_call = true;
+    rc = SecRilSetRealCallStatus(adev->voice.ril.client, true);
+    if (rc) {
+        ALOGE("%s: SecRilSetRealCallStatus() failed", __func__);
+    } else {
+        ALOGE("%s: SecRilSetRealCallStatus() success", __func__);
+    }
 
     return ret;
 }
@@ -450,6 +456,13 @@ int voice_start_call(struct audio_device *adev)
 int voice_stop_call(struct audio_device *adev)
 {
     int ret = 0;
+
+    ret = SecRilSetRealCallStatus(adev->voice.ril.client, false);
+    if (ret) {
+        ALOGE("%s: SecRilSetRealCallStatus() failed", __func__);
+    } else {
+        ALOGE("%s: SecRilSetRealCallStatus() success", __func__);
+    }
 
     adev->voice.in_call = false;
     ret = voice_extn_stop_call(adev);

@@ -51,6 +51,8 @@ static int ril_connect_if_required(struct ril_handle *ril)
         ALOGE("%s: FATAL: Failed to connect to RILD: %s",
               __func__, strerror(errno));
         return -1;
+    } else {
+        ALOGE("%s: Successfully connected to RILD", __func__);
     }
 
     ALOGV("%s: Successfully connected to RILD", __func__);
@@ -65,10 +67,28 @@ int ril_open(struct ril_handle *ril)
         return -1;
     }
 
+    /* initialise audio ril client */
+    ALOGE("%s: Initialising SecRil client...", __func__);
+    ril->client = SecRilOpen();
+
+    if (ril->client == NULL) {
+        ALOGE("%s: SecRilOpen() failed", __func__);
+    } else {
+        ALOGE("%s: SecRilOpen() success", __func__);
+    }
+
     ril->client = OpenClient_RILD();
     if (ril->client == NULL) {
         ALOGE("%s: OpenClient_RILD() failed", __func__);
         return -1;
+    } else {
+        ALOGE("%s: OpenClient_RILD() success", __func__);
+    }
+
+    if (SecRilCheckConnection(ril->client)) {
+        ALOGE("%s: SecRil connection failed", __func__);
+    } else {
+        ALOGE("%s: SecRil connection success", __func__);
     }
 
     property_get(VOLUME_STEPS_PROPERTY, property, VOLUME_STEPS_DEFAULT);
@@ -122,6 +142,13 @@ int ril_set_call_volume(struct ril_handle *ril,
         return 0;
     }
 
+    ALOGE("%s: Setting audio ril volume...", __func__);
+    rc = SecRilSetVoiceVolume(ril->client, sound_type, volume);
+
+    if (rc != 0) {
+        ALOGE("%s: SecRilSetVoiceVolume() failed, rc=%d", __func__, rc);
+    }
+
     rc = SetCallVolume(ril->client,
                        sound_type,
                        (int)(volume * ril->volume_steps_max));
@@ -141,6 +168,13 @@ int ril_set_call_audio_path(struct ril_handle *ril, enum _AudioPath path)
     if (rc != 0) {
         ALOGE("%s: Failed to connect to RIL (%s)", __func__, strerror(rc));
         return 0;
+    }
+
+    ALOGE("%s: Setting audio ril client path...", __func__);
+    rc = SecRilSetVoicePath(ril->client, path, ORIGINAL_PATH);
+
+    if (rc != 0) {
+        ALOGE("%s: SecRilSetVoicePath() failed, rc=%d", __func__, rc);
     }
 
     rc = SetCallAudioPath(ril->client, path);
@@ -178,6 +212,35 @@ int ril_set_mute(struct ril_handle *ril, enum _MuteCondition condition)
     if (rc != 0) {
         ALOGE("%s: Failed to connect to RIL (%s)", __func__, strerror(rc));
         return 0;
+    }
+
+    switch (condition) {
+        case TX_UNMUTE:
+            rc = SecRilSetTxMute(ril->client, false);
+            break;
+        case TX_MUTE:
+            rc = SecRilSetTxMute(ril->client, true);
+            break;
+        case RX_UNMUTE:
+            rc = SecRilSetRxMute(ril->client, false);
+            break;
+        case RX_MUTE:
+            rc = SecRilSetRxMute(ril->client, true);
+            break;
+        case RXTX_UNMUTE:
+            rc = SecRilSetRxMute(ril->client, false);
+            rc = SecRilSetTxMute(ril->client, false);
+            break;
+        case RXTX_MUTE:
+            rc = SecRilSetRxMute(ril->client, true);
+            rc = SecRilSetTxMute(ril->client, true);
+            break;
+        default:
+            break;
+    }
+
+    if (rc != 0) {
+        ALOGE("%s: SecRilSetXxMute() failed, rc=%d", __func__, rc);
     }
 
     rc = SetMute(ril->client, condition);
