@@ -121,16 +121,6 @@ LOCAL_MODULE_PATH  := $(TARGET_OUT)/etc
 include $(BUILD_PREBUILT)
 
 ######################
-### init.qcom.post_boot.sh
-include $(CLEAR_VARS)
-LOCAL_MODULE       := init.qcom.post_boot.sh
-LOCAL_MODULE_TAGS  := optional eng
-LOCAL_MODULE_CLASS := ETC
-LOCAL_SRC_FILES    := etc/$(LOCAL_MODULE)
-LOCAL_MODULE_PATH  := $(TARGET_OUT)/etc
-include $(BUILD_PREBUILT)
-
-######################
 ### init.qcom.audio.sh
 include $(CLEAR_VARS)
 LOCAL_MODULE       := init.qcom.audio.sh
@@ -180,6 +170,22 @@ LOCAL_SRC_FILES    := etc/$(LOCAL_MODULE)
 LOCAL_MODULE_PATH  := $(TARGET_OUT)/etc
 include $(BUILD_PREBUILT)
 
+######################
+### init.qcom.power.rc
+include $(CLEAR_VARS)
+LOCAL_MODULE       := init.qcom.power.rc
+LOCAL_MODULE_TAGS  := optional eng
+LOCAL_MODULE_CLASS := ETC
+ifeq ($(filter j7ltespr j7ltechn,$(TARGET_DEVICE)),)
+LOCAL_SRC_FILES    := etc/init.qcom.power_msm8916.rc
+else
+LOCAL_SRC_FILES    := etc/init.qcom.power_msm8929.rc
+endif
+LOCAL_MODULE_PATH  := $(TARGET_ROOT_OUT)
+include $(BUILD_PREBUILT)
+
+######################
+### init.link_ril_db.sh
 include $(CLEAR_VARS)
 LOCAL_MODULE       := init.link_ril_db.sh
 LOCAL_MODULE_TAGS  := optional eng
